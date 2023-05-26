@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  backend:
+    container_name: scraping_example_be
+    tty: true
+    build:
+      context: ./backend/.
+      dockerfile: ./dockerfile
+    # restart: always
+    expose:
+      - "8100"
+    ports:
+      - 8100:8100
+    env_file:
+      - ./backend/.env.sandbox
+    volumes:
+      - ./backend:/backend
+      # - ~/.aws:/root/.aws
+    depends_on:
+      - db
+    networks:
+      - backend-net
+
+  db:
+    image: postgres
+    container_name: scraping_example_db
+    # restart: always
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    environment:  
+    ### 初回ログイン専用のユーザー情報
+    ### 本番環境では必ず本番環境専用アカウントを作成しsandboxに環境変数定義、初期アカウントは削除&ログインできない事を確認 本番環境専用アカウントは絶対に公開しない事。
+      POSTGRES_USER: first
+      POSTGRES_PASSWORD: sepg1010
+      POSTGRES_DB: scraping_example
+      TZ: "Asia/Tokyo"
+    networks:
+      - backend-net
+
+  selenium:
+    image: selenium/standalone-chrome:4.1.4-20220427
+    container_name: scraping_example_selenium
+    # restart: always
+    expose: 
+      - "4444"
+    ports:
+      - 4444:4444
+      - 7900:7900   # default: secret
+    shm_size: "2gb"
+    volumes:
+      - /dev/shm:/dev/shm
+    networks:
+      - backend-net
+  
+  frontend:
+    stdin_open: true
+    container_name: scraping_example_fe
+    # restart: always
+    build:
+      context: ./frontend/.
+      dockerfile: dockerfile
+    env_file:
+      - ./frontend/.env.sandbox
+    volumes:
+      - ./frontend:/frontend
+    ports:
+      - 3100:3000
+    depends_on:
+      - backend
+    
+volumes:
+  pg-data:
+    external: true
+
+networks:
+  backend-net:
+    name: backend-net
+    driver: bridge

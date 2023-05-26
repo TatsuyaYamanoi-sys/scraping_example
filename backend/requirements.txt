@@ -1,0 +1,16 @@
+dnspython==2.3.0                # 名前解決
+email-validator==2.0.0.post2    # pydanticのemailバリデーション
+gunicorn==20.1.0                # uvicornよりも推奨されている プロキシサーバー, アプリケーションサーバー
+passlib==1.7.4                  # use hash
+pydantic==1.10.7                # 型アノテーション, 入出力JSONパース
+PyJWT==2.6.0                    # JWT
+urllib3==1.26.15
+uvicorn[standard]
+selenium
+BeautifulSoup4
+requests
+SQLAlchemy
+psycopg2
+databases[postgresql]       # 多くの一般的なデータベースへの非同期インターフェースを提供するパッケージ
+fastapi
+alembic     # SQLAlchemyと併せて使用するマイグレートパッケージ

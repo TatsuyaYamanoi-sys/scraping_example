@@ -1,0 +1,27 @@
+$ psql -U username -d postgres    
+    psql -h ホスト名 -p ポート番号 -U ロール名 -d データベース名. 
+    初期状態ではusername=postgres 
+
+# CREATE USER username WITH PASSWORD 'password' SUPERUSER;    
+    superuser権限でユーザーを作成. 
+
+# DROP USER IF EXISTS username;    
+    (username)ユーザーを削除
+
+# create database db_name;
+    databaseを作成
+
+# \du;
+    user一覧表示
+
+# \dl; 
+    database一覧表示
+
+# \dt; 
+    ...表示
+
+$ postgres -D /usr/local/var/postgres
+    サービスの起動
+
+# \q; 
+    databaseから切断
