@@ -1,5 +1,5 @@
 __pycache__
-docker-compose_mongo.yaml
+docker-compose_mongo.yml
 .env.sandbox
 docks/
 pg-data
