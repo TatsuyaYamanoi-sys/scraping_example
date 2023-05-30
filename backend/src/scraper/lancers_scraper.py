@@ -1,8 +1,9 @@
+import asyncio
 import datetime
 import logging
 import re
 from time import sleep
-from typing import List, Dict, Union
+from typing import List, Dict, Tuple, Union
 
 from pathlib import Path
 from selenium import webdriver
@@ -178,7 +179,7 @@ class LancersScraper(Scraper):
         self.login()
         self.search_projects()
 
-    def set_project(self):
+    def set_projects(self):
         try:
             elems = self.driver.find_elements(By.CSS_SELECTOR, 'div.c-media__content__right > a.c-media__title') 
             project_db_name_list = ProjectManager().select_all_name()
@@ -216,7 +217,7 @@ class LancersScraper(Scraper):
     
     def get_page_projects(self) -> List[Dict]:
         try:
-            self.set_project()
+            self.set_projects()
             print(self.projects)
             # return self.projects
 
@@ -233,7 +234,7 @@ class LancersScraper(Scraper):
     def get_multiple_pages_projects(self, pages: Union[int, str]="all") -> List[Dict]:
         try:
             while True:
-                self.get_project()
+                self.set_projects()
                 self.page_num += 1
                 WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located((By.CLASS_NAME, 'pager__item__anchor')))
                 next_button = self.driver.find_element(By.CLASS_NAME, 'pager__item__anchor')
@@ -270,6 +271,34 @@ class LancersScraper(Scraper):
         finally:
             self.page_num, self.id = 0
 
+    async def get_detail_page_patternA(self) -> Union[Tuple[str], bool]:
+        try:
+            low_price = self.driver.find_elements(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number').text
+            description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
+            return low_price, description
+        except:
+            return False
+
+    async def get_detail_page_patternB(self) -> Union[Tuple[str], bool]:
+        try:
+            low_price = self.driver.find_element(By.CSS_SELECTOR, 'div.cp-projectView__compensation').text
+            if re_match := re.match(r'^(0|[1-9]\d{0,2}(,\d{3})+)', low_price):
+                low_price = re_match.group()
+            elif re_match := re.match(r'^([1-9]\d*)', low_price):
+                low_price = re_match.group()
+            description = self.driver.find_element(By.CSS_SELECTOR, 'dl.cp-projectView__dltable__list > dd.cp-projectView__dltable__detail').text
+            return low_price, description
+        except:
+            return False
+    
+    async def get_detail_page_patternC(self) -> Union[Tuple[str], bool]:
+        try:
+            low_price = self.driver.find_element(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--high > span.price-number').text
+            description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
+            return low_price, description
+        except:
+            return False
+
     def get_multiple_pages_projects_detail(self, pages: Union[int, str]="all") -> List[Dict]:
         logger.info({
             'action': 'get_multiple_pages_projects_detail()', 
@@ -288,6 +317,8 @@ class LancersScraper(Scraper):
                 })
                 self.driver.implicitly_wait(2)
                 ### reward ###  #
+                # loop = asyncio.get_event_loop()
+
                 if len(self.driver.find_elements(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number')) > 0:
                     low_price = self.driver.find_element(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number').text
                     description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
@@ -323,9 +354,7 @@ class LancersScraper(Scraper):
 
     def quit(self):
         self.driver.quit()
-    # @property     # attributeerrorでるので要調査. おそらくdfを@prorertyすることで起こる.
-    # def project_df(self):
-    #     return self.project_df
+
 
 if __name__ == "__main__":
     LS = LancersScraper()
