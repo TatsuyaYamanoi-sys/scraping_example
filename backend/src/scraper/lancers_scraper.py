@@ -273,15 +273,30 @@ class LancersScraper(Scraper):
 
     async def get_detail_page_patternA(self) -> Union[Tuple[str], bool]:
         try:
-            low_price = self.driver.find_elements(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number').text
+            logger.info({
+                'action': 'get_detail_page_patternA', 
+                'status': 'run', 
+            })
+
+            low_price = await self.driver.find_elements(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number').text
             description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
             return low_price, description
         except:
             return False
+        finally:
+            logger.info({
+                'action': 'get_detail_page_patternA', 
+                'status': 'success', 
+            })
 
     async def get_detail_page_patternB(self) -> Union[Tuple[str], bool]:
         try:
-            low_price = self.driver.find_element(By.CSS_SELECTOR, 'div.cp-projectView__compensation').text
+            logger.info({
+                'action': 'get_detail_page_patternB', 
+                'status': 'run', 
+            })
+
+            low_price = await self.driver.find_element(By.CSS_SELECTOR, 'div.cp-projectView__compensation').text
             if re_match := re.match(r'^(0|[1-9]\d{0,2}(,\d{3})+)', low_price):
                 low_price = re_match.group()
             elif re_match := re.match(r'^([1-9]\d*)', low_price):
@@ -290,14 +305,38 @@ class LancersScraper(Scraper):
             return low_price, description
         except:
             return False
+        finally:
+            logger.info({
+                'action': 'get_detail_page_patternB', 
+                'status': 'success', 
+            })
     
     async def get_detail_page_patternC(self) -> Union[Tuple[str], bool]:
         try:
-            low_price = self.driver.find_element(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--high > span.price-number').text
+            logger.info({
+                'action': 'get_detail_page_patternC', 
+                'status': 'run', 
+            })
+
+            low_price = await self.driver.find_element(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--high > span.price-number').text
             description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
             return low_price, description
         except:
             return False
+        finally:
+            logger.info({
+                'action': 'get_detail_page_patternC', 
+                'status': 'success', 
+            })
+
+    # async def get_detail(self) -> Union[Tuple[str], bool]:
+    #     results = asyncio.gather(
+    #         get_detail_page_patternA(),
+    #         get_detail_page_patternB(),
+    #         get_detail_page_patternC(),
+    #     )
+
+    #     return results
 
     def get_multiple_pages_projects_detail(self, pages: Union[int, str]="all") -> List[Dict]:
         logger.info({
@@ -317,24 +356,38 @@ class LancersScraper(Scraper):
                 })
                 self.driver.implicitly_wait(2)
                 ### reward ###  #
-                # loop = asyncio.get_event_loop()
+                get_details = asyncio.gather(
+                    get_detail_page_patternA(),
+                    get_detail_page_patternB(),
+                    get_detail_page_patternC(),
+                )
+                loop = asyncio.get_event_loop()
+                result = loop.run_until_complete(get_details)
+                if result:
+                    low_price = result[0]
+                    description = result[1]
+                if not low_price:
+                    low_price = 0
+                    description = 'get_detail() is failed'
 
-                if len(self.driver.find_elements(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number')) > 0:
-                    low_price = self.driver.find_element(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number').text
-                    description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
-                    print('page-pattern: a')    # debug
-                elif len(self.driver.find_elements(By.CSS_SELECTOR, 'div.cp-projectView__compensation')) > 0:
-                    low_price = self.driver.find_element(By.CSS_SELECTOR, 'div.cp-projectView__compensation').text
-                    if re.match(r'^(0|[1-9]\d{0,2}(,\d{3})+)', low_price):
-                        low_price = re.match(r'^(0|[1-9]\d{0,2}(,\d{3})+)', low_price).group()
-                    elif re.match(r'^([1-9]\d*)', low_price):
-                        low_price = re.match(r'^([1-9]\d*)', low_price).group()
-                    description = self.driver.find_element(By.CSS_SELECTOR, 'dl.cp-projectView__dltable__list > dd.cp-projectView__dltable__detail').text
-                    print('page-pattern: b')    # debug
-                elif len(self.driver.find_elements(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--high > span.price-number')) > 0:
-                    low_price = self.driver.find_element(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--high > span.price-number').text
-                    description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
-                    print('page-pattern: c')    # debug
+                loop.close()
+
+                # if len(self.driver.find_elements(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number')) > 0:
+                #     low_price = self.driver.find_element(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number').text
+                #     description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
+                #     print('page-pattern: a')    # debug
+                # elif len(self.driver.find_elements(By.CSS_SELECTOR, 'div.cp-projectView__compensation')) > 0:
+                #     low_price = self.driver.find_element(By.CSS_SELECTOR, 'div.cp-projectView__compensation').text
+                #     if re.match(r'^(0|[1-9]\d{0,2}(,\d{3})+)', low_price):
+                #         low_price = re.match(r'^(0|[1-9]\d{0,2}(,\d{3})+)', low_price).group()
+                #     elif re.match(r'^([1-9]\d*)', low_price):
+                #         low_price = re.match(r'^([1-9]\d*)', low_price).group()
+                #     description = self.driver.find_element(By.CSS_SELECTOR, 'dl.cp-projectView__dltable__list > dd.cp-projectView__dltable__detail').text
+                #     print('page-pattern: b')    # debug
+                # elif len(self.driver.find_elements(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--high > span.price-number')) > 0:
+                #     low_price = self.driver.find_element(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--high > span.price-number').text
+                #     description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
+                #     print('page-pattern: c')    # debug
 
                 self.projects[i] = {
                     'low_price': low_price, 
