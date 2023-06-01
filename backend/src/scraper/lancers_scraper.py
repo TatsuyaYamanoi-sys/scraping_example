@@ -91,7 +91,6 @@ class LancersScraper(Scraper):
         })
         super().__init__(url)
         self.projects = []
-        self.page_num = 0
 
     def login(self):
         try:
@@ -174,52 +173,59 @@ class LancersScraper(Scraper):
             })
             sleep(1)
 
-    @staticmethod
     def start(self):
         self.login()
         self.search_projects()
 
-    def set_projects(self):
+    async def get_projects(self, page_num: int=1, url: str='') -> List[Dict]:
         try:
-            elems = self.driver.find_elements(By.CSS_SELECTOR, 'div.c-media__content__right > a.c-media__title') 
-            project_db_name_list = ProjectManager().select_all_name()
+            if url == '':
+                await self.driver.get(url)
+                await asyncio.sleep(1)
+
+            elems = await self.driver.find_elements(By.CSS_SELECTOR, 'div.c-media__content__right > a.c-media__title') 
+            project_db_name_list = await ProjectManager().select_all_name()
             # project_db_name_list = session.query(models.project.Project.name).all() #
 
-            if elems:  
-                for elem in elems:
-                    project_name = elem.find_element(By.CSS_SELECTOR, 'span.c-media__title-inner').text
-                    pattern = re.compile(r'￥n|\n|\r\n')
-                    if pattern.search(project_name):
-                        project_name = re.sub('￥n|\n|\r\n', ' ', project_name)
+            for i, elem in enumerate(elems):
+                project_name = await elem.find_element(By.CSS_SELECTOR, 'span.c-media__title-inner').text
+                pattern = re.compile(r'￥n|\n|\r\n')
+                if pattern.search(project_name):
+                    project_name = re.sub('￥n|\n|\r\n', ' ', project_name)
 
-                    if name not in project_name_db:
-                        project_url = elem.get_attribute('href')
-                    
-                        self.projects[i] = {
-                            'id': i, 
-                            'name': project_name,
-                            'url': project_url, 
-                        }
-                        self.id += 1
+                if project_name not in project_name_db:
+                    project_url = elem.get_attribute('href')
+                
+                    projects[i] = {
+                        'name': project_name,
+                        'url': project_url, 
+                        'page': page_num, 
+                    }
 
-                        print('project: ', projects[self.id])
+                    print('projects: ', projects[i])
 
             else:
                 print('条件に一致するプロジェクトがみつかりませんでした.')
                 self.driver.quit()
+
         except Exception as e:
             logger.error({
                 'action': 'LancersScraper().set_project()', 
                 'status': 'exception', 
                 'message': e
             })
+            self.id = 0
             self.driver.quit()
+
+        finally:
+            return projects
     
     def get_page_projects(self) -> List[Dict]:
         try:
-            self.set_projects()
-            print(self.projects)
-            # return self.projects
+            loop = asyncio.get_event_loop()
+            result = loop.run_until_complete(self.get_projects())
+            print('get_page_projects():', result)
+            # return result
 
         except Exception as e:
             logger.error({
@@ -227,49 +233,76 @@ class LancersScraper(Scraper):
                 'status': 'exception', 
                 'message': e
             })
+            self.id = 0
             self.driver.quit()
         finally:
             self.id = 0
     
-    def get_multiple_pages_projects(self, pages: Union[int, str]="all") -> List[Dict]:
+    def get_multiple_pages_urls(self, page: Union[int, str]="all") -> List[str]:
         try:
+            page_num = 0
             while True:
-                self.set_projects()
-                self.page_num += 1
-                WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located((By.CLASS_NAME, 'pager__item__anchor')))
-                next_button = self.driver.find_element(By.CLASS_NAME, 'pager__item__anchor')
-                if pages == self.page_num:
+                page_num += 1
+                page_urls = []# <- 現在のURLを配列に追加
+                next_button = WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located((By.CLASS_NAME, 'pager__item__anchor')))
+                # next_button = self.driver.find_element(By.CLASS_NAME, 'pager__item__anchor')
+                if page == page_num:
                     logger.info({
-                        'action': 'get_multiple_pages_projects())', 
+                        'action': 'get_multiple_pages_urls()', 
                         'status': 'success', 
-                        'message': f'get_multiple_pages_projects() acquired {pages}pages progects'
+                        'message': f'get_multiple_pages_urls() acquired {page}pages urls'
                     })
-                    print(self.projects)    #
-                    # return self.projects
-                    break
-
+                    print(page_urls)    #
+                    return page_urls
+                
                 if next_button:
                     next_button.click()
                 else:
                     logger.info({
-                        'action': 'get_multiple_pages_projects()', 
+                        'action': 'get_multiple_pages_urls()', 
                         'status': 'success', 
-                        'message': 'get_multiple_pages_projects() acquired all progects'
+                        'message': 'get_multiple_pages_urls() acquired all urls'
                     })
-                    print(self.projects)    #
-                    # return self.projects
-                    break
+                    print(page_urls)    #
+                    return page_urls
 
+        except Exception as e:
+            logger.error({
+                'action': 'get_multiple_pages_urls()', 
+                'status': 'exception', 
+                'message': e
+            })
+            self.driver.quit()
+
+    
+    def get_multiple_pages_projects(self, page: Union[int, str]="all") -> List[Dict]:
+        try:
+            page_num = 0
+            urls = get_multiple_pages_urls(page)
+            tasks = []
+            
+            for url in urls:
+                page_num += 1
+                tasks.append(self.get_projects(page_num=page_num, url=url))
+
+            get_projects = asyncio.gather(*tasks)
+            loop = asyncio.get_event_loop()
+            result = loop.run_until_complete(get_projects)
+
+            return result
+            
         except Exception as e:
             logger.error({
                 'action': 'get_multiple_pages_projects()', 
                 'status': 'exception', 
                 'message': e
             })
+            self.id = 0
             self.driver.quit()
 
         finally:
-            self.page_num, self.id = 0
+            loop.close()
+            self.id = 0
 
     async def get_detail_page_patternA(self) -> Union[Tuple[str], bool]:
         try:
@@ -329,23 +362,14 @@ class LancersScraper(Scraper):
                 'status': 'success', 
             })
 
-    # async def get_detail(self) -> Union[Tuple[str], bool]:
-    #     results = asyncio.gather(
-    #         get_detail_page_patternA(),
-    #         get_detail_page_patternB(),
-    #         get_detail_page_patternC(),
-    #     )
-
-    #     return results
-
-    def get_multiple_pages_projects_detail(self, pages: Union[int, str]="all") -> List[Dict]:
+    def get_multiple_pages_projects_detail(self, page: Union[int, str]="all") -> List[Dict]:
         logger.info({
             'action': 'get_multiple_pages_projects_detail()', 
             'status': 'run'
         })
         
         try:
-            projects = self.get_multiple_pages_projects(pages)
+            projects = self.get_multiple_pages_projects(page)
             for i in range(len(projects)):
                 url = self.projects[i]['url']
                 self.driver.get(url)

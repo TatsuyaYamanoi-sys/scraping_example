@@ -1,4 +1,4 @@
-from .database_settings import Base, BaseEngine, BaseSession
+from .db_settings import Base, BaseEngine, BaseSession
 from .env import env
 
 
