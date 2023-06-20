@@ -48,9 +48,7 @@ class Scraper:
                 'env.SELENIUM_URL': env.SELENIUM_URL, 
             })
             self.driver = webdriver.Remote(
-                # command_executor=env.SELENIUM_URL,
                 command_executor='http://selenium:4444/wd/hub',     # selenium = 172.17.0.2
-                # desired_capabilities=DesiredCapabilities.CHROME.copy()
                 options=webdriver.ChromeOptions()
             )       # <- docker
 #           options = Options()     # ヘッドレスモード時, driverのoptionsに渡す.
@@ -74,6 +72,32 @@ class Scraper:
                 'action': 'Scraper', 
                 'status': 'driver-settings: success'
             })
+
+    def asy_scrape(self, url, *, loop):
+        logger.info({
+            'action': 'LancersScraper().asy_scrape()', 
+            'status': 'run'
+        })
+        loop.run_in_executor(None, self.asy_get_url, url)
+
+    async def asy_get_url(self, url):
+        logger.info({
+            'action': 'LancersScraper().asy_get_url()', 
+            'status': 'run'
+        })
+        try:
+            asy_driver = webdriver.Remote(
+                    command_executor='http://selenium:4444/wd/hub', 
+                    options=webdriver.ChromeOptions()
+            )
+            await asy_driver.get(url)
+        except Exception as e:
+            logger.error({
+                'action': 'Scraper', 
+                'status': 'as_get_url(): exception', 
+                'message': e
+            })
+            self.driver.quit()
 
 
 class LancersScraper(Scraper):
@@ -170,12 +194,19 @@ class LancersScraper(Scraper):
         self.login()
         self.search_projects()
 
-    async def get_projects(self, page_num: int=1, url: str='') -> List[Dict]:
+    def get_projects(self, page_num: int=1, urls: Union[str, List[str]]='') -> List[Dict]:
         projects = []
         try:
-            if not url == '':
-                self.driver.get(url)
-                await asyncio.sleep(1)
+            if not urls == '':
+                logger.info({
+                    'action': 'LancersScraper().get_projects(): if not urls == ""', 
+                    'status': 'run'
+                })
+                # self.driver.get(url)
+                loop = asyncio.get_event_loop()
+                for url in urls:
+                    gather = asyncio.gather(asy_scrape(url, loop=loop))
+                loop.run_until_complete(gather)
 
             elems = self.driver.find_elements(By.CSS_SELECTOR, 'div.c-media__content__right > a.c-media__title') 
             project_name_list_db = ProjectManager().select_all_name()     # project_name_list_db = session.query(Project.name).all()
@@ -195,7 +226,7 @@ class LancersScraper(Scraper):
                         'page': page_num, 
                     }
 
-                    print('projects: ', projects[i])
+                    print(f'projects[{i}]: ', projects[i])
 
             else:
                 print('条件に一致するプロジェクトがみつかりませんでした.')
@@ -210,6 +241,7 @@ class LancersScraper(Scraper):
             self.driver.quit()
 
         finally:
+            print('projects: ', projects)
             return projects
     
     def get_page_projects(self) -> List[Dict[str, Union[str, int]]]:
@@ -218,11 +250,8 @@ class LancersScraper(Scraper):
                 'action': 'get_page_projects()', 
                 'status': 'run', 
             })
-
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(self.get_projects())
+            result = self.get_projects()
             print('get_page_projects():', result)
-            loop.close()
             # return result
 
         except Exception as e:
