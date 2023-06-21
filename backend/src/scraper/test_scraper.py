@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import datetime
 import logging
 import re
@@ -73,14 +74,14 @@ class Scraper:
                 'status': 'driver-settings: success'
             })
 
-    def asy_scrape(self, url, *, loop):
+    async def _asy_scrape(self, executor, url: str, *, loop):
         logger.info({
             'action': 'LancersScraper().asy_scrape()', 
             'status': 'run'
         })
-        loop.run_in_executor(None, self.asy_get_url, url)
+        await loop.run_in_executor(executor, self._asy_get_url, url)
 
-    async def asy_get_url(self, url):
+    def _asy_get_url(self, url: str):
         logger.info({
             'action': 'LancersScraper().asy_get_url()', 
             'status': 'run'
@@ -90,7 +91,7 @@ class Scraper:
                     command_executor='http://selenium:4444/wd/hub', 
                     options=webdriver.ChromeOptions()
             )
-            await asy_driver.get(url)
+            asy_driver.get(url)
         except Exception as e:
             logger.error({
                 'action': 'Scraper', 
@@ -100,7 +101,7 @@ class Scraper:
             self.driver.quit()
 
 
-class LancersScraper(Scraper):
+class TestLancersScraper(Scraper):
     def __init__(self, url='https://www.lancers.jp/'):
         logger.info({
             'action': 'LancersScraper', 
@@ -194,19 +195,19 @@ class LancersScraper(Scraper):
         self.login()
         self.search_projects()
 
-    def get_projects(self, page_num: int=1, urls: Union[str, List[str]]='') -> List[Dict]:
+    def get_page_projects(self, page_num: int=1, urls: Union[str, List[str]]='') -> List[Dict]:
         projects = []
         try:
             if not urls == '':
                 logger.info({
-                    'action': 'LancersScraper().get_projects(): if not urls == ""', 
+                    'action': 'LancersScraper().get_page_projects(): if not urls == ""', 
                     'status': 'run'
                 })
                 # self.driver.get(url)
                 loop = asyncio.get_event_loop()
-                for url in urls:
-                    gather = asyncio.gather(asy_scrape(url, loop=loop))
-                loop.run_until_complete(gather)
+                with concurrent.futures.ProcessPoolExecutor() as pool:
+                    gathers = [asyncio.gather(_asy_scrape(url, executor=pool, loop=loop)) for url in urls]
+                loop.run_until_complete(gathers)
 
             elems = self.driver.find_elements(By.CSS_SELECTOR, 'div.c-media__content__right > a.c-media__title') 
             project_name_list_db = ProjectManager().select_all_name()     # project_name_list_db = session.query(Project.name).all()
@@ -234,7 +235,7 @@ class LancersScraper(Scraper):
 
         except Exception as e:
             logger.error({
-                'action': 'LancersScraper().get_projects()', 
+                'action': 'LancersScraper().get_page_projects()', 
                 'status': 'exception', 
                 'message': e
             })
@@ -243,24 +244,6 @@ class LancersScraper(Scraper):
         finally:
             print('projects: ', projects)
             return projects
-    
-    def get_page_projects(self) -> List[Dict[str, Union[str, int]]]:
-        try:
-            logger.info({
-                'action': 'get_page_projects()', 
-                'status': 'run', 
-            })
-            result = self.get_projects()
-            print('get_page_projects():', result)
-            # return result
-
-        except Exception as e:
-            logger.error({
-                'action': 'get_page_projects()', 
-                'status': 'exception', 
-                'message': e
-            })
-            self.driver.quit()
     
     def _get_multiple_pages_urls(self, page: Union[int, bool]=True) -> List[Dict[str, Union[str, int]]]:
         try:
@@ -273,10 +256,14 @@ class LancersScraper(Scraper):
             page_urls = []
             while page:
                 page_num += 1
-                page_urls.append({'url': url, 'page_num': page_num}) # <- ページURLとページ番号を配列に追加
+                url = ""
+                page_urls.append({'url': url, 'page_num': page_num})
                 next_button = WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located((By.CLASS_NAME, 'pager__item__anchor')))
                 # next_button = self.driver.find_element(By.CLASS_NAME, 'pager__item__anchor')
                 if page == page_num:
+                    '''
+                    指定ページ数に達したら, 値を返しループを抜ける.
+                    '''
                     logger.info({
                         'action': '_get_multiple_pages_urls()', 
                         'status': 'success', 
@@ -288,6 +275,9 @@ class LancersScraper(Scraper):
                 if next_button:
                     next_button.click()
                 else:
+                    '''
+                    最後のページに達したら, 値を返しループを抜ける.
+                    '''
                     logger.info({
                         'action': '_get_multiple_pages_urls()', 
                         'status': 'success', 
@@ -312,11 +302,11 @@ class LancersScraper(Scraper):
             projects = []
             
             for url in urls:
-                tasks.append(self.get_projects(page_num=url['page_num'], url=url['url']))
+                tasks.append(self.get_page_projects(page_num=url['page_num'], url=url['url']))
 
-            get_projects = asyncio.gather(*tasks)
+            get_page_projects = asyncio.gather(*tasks)
             loop = asyncio.get_event_loop()
-            result = projects.append(*loop.run_until_complete(get_projects))
+            result = projects.append(*loop.run_until_complete(get_page_projects))
 
             return result
             
@@ -340,7 +330,7 @@ class LancersScraper(Scraper):
 
             low_price = await self.driver.find_elements(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number').text
             description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
-            return low_price, description
+            return {'low_price': low_price, 'description': description}
         except:
             return False
         finally:
@@ -362,7 +352,7 @@ class LancersScraper(Scraper):
             elif re_match := re.match(r'^([1-9]\d*)', low_price):
                 low_price = re_match.group()
             description = self.driver.find_element(By.CSS_SELECTOR, 'dl.cp-projectView__dltable__list > dd.cp-projectView__dltable__detail').text
-            return low_price, description
+            return {'low_price': low_price, 'description': description}
         except:
             return False
         finally:
@@ -380,7 +370,7 @@ class LancersScraper(Scraper):
 
             low_price = await self.driver.find_element(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--high > span.price-number').text
             description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
-            return low_price, description
+            return {'low_price': low_price, 'description': description}
         except:
             return False
         finally:
@@ -407,24 +397,25 @@ class LancersScraper(Scraper):
                 })
                 self.driver.implicitly_wait(2)
                 ### reward ###  #
+                loop = asyncio.get_event_loop()
                 get_details = asyncio.gather(
                     self._get_detail_page_patternA(),
                     self._get_detail_page_patternB(),
                     self._get_detail_page_patternC(),
                 )
-                loop = asyncio.get_event_loop()
-                result = loop.run_until_complete(get_details)
-                
-                if result:
-                    project['low_price'] = result[0]
-                    project['description'] = result[1]
-                    if not low_price:
-                        low_price = 0
-                        description = 'get_detail() is failed'
-
-                projects_with_detail[i] = [project]
+                results = await get_details
                 loop.close()
 
+                for result in results:
+                    if type(result) == dict:
+                        print('result: ', type(result), result)
+                        details = result
+                
+                if details:
+                    project.update(details)
+
+                projects_with_detail[i] = [project]
+                
                 # if len(self.driver.find_elements(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number')) > 0:
                 #     low_price = self.driver.find_element(By.CSS_SELECTOR, 'span.workprice__text > span.price-block.workprice__text--low > span.price-number').text
                 #     description = self.driver.find_element(By.CSS_SELECTOR, 'dl.c-definitionList.definitionList--holizonalA01 > dd.definitionList__description').text
