@@ -1,4 +1,4 @@
-# 【fastapi_blog】
+# 【fastapi_react_scraping】
 <dl>
     <dt>目的: </dt> 
     <dd>fastAPIの学習</dd>

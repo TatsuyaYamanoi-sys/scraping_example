@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
 from settings.env import env
@@ -21,8 +21,8 @@ class BaseEngine(object):
 class BaseSession(BaseEngine):
     def __init__(self):
         super().__init__()
-        self.__session = scoped_session(sessionmaker(autocommit=False, autoflush=False,bind=self.engine))
+        self._session = scoped_session(sessionmaker(autocommit=False, autoflush=False,bind=self.engine))
 
     @property
     def session(self):
-        return self.__session
+        return self._session
