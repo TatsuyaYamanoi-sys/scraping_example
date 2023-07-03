@@ -33,9 +33,10 @@ class ProjectManager(BaseSession):
         return project
 
     def select_all_name(self) -> Dict:
-        objs = self.__session.query(Project.name).order_by(Project.id)
-        projects = [to_dict(obj) for obj in objs]
-        return projects
+        objs = self._session.query(Project.name).order_by(Project.id)
+        if objs:
+            projects = [to_dict(obj) for obj in objs]
+            return projects
 
     def save(self, obj:Dict):
         try:
